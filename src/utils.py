@@ -1,9 +1,22 @@
-import logging
+import csv
 import os
 from pathlib import Path
-from typing import Optional, Tuple, Union
+from typing import Tuple, Union
 
 import secrets
+
+
+def detect_delimiter(infile: Path) -> str:
+    """
+    find the column/field delimiter in a given file
+
+    :param infile: file to detect the column/field delimiter for
+    :return: the column/field delimiter as a string
+    """
+    with open(infile, "r") as infile:
+        delimiter = str(csv.Sniffer().sniff(infile.readline()).delimiter)
+
+    return delimiter
 
 
 def make_dir(parent_dir: str, dir_name: str = "") -> str:
@@ -68,36 +81,3 @@ def setup(output_dir: str) -> Tuple[str, str]:
     tmp_dir = make_dir(parent_dir, "tmp")
 
     return output_dir, tmp_dir
-
-
-def setup_logging_and_tracing(
-    log_level: int = logging.INFO,
-    log_name: Optional[str] = None,
-) -> None:
-    """
-    setup local logging
-
-    :param log_level: the log level to use. defaults to logging.INFO
-    :param log_name: name of the logging file
-    """
-    if log_name:
-        with open(log_name, "w") as outfile:
-            pass
-
-    log_format = "{levelname} {asctime} {name}:{funcName}:{lineno} {message}"
-
-    if log_name:
-        logging.basicConfig(
-            filename=log_name,
-            style="{",
-            format=log_format,
-            datefmt="%I:%M:%S %p",
-            level=log_level,
-        )
-    else:
-        logging.basicConfig(
-            style="{",
-            format=log_format,
-            datefmt="%I:%M:%S %p",
-            level=log_level,
-        )
