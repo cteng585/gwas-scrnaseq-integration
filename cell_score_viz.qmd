@@ -58,7 +58,7 @@ ra_markers_path <- "src/seurat/output/ra_markers.csv"
 oa_vs_ra_markers_path <- "src/seurat/output/oa_vs_ra_markers.csv"
 
 # path to write CSV with markers differentiating OA and RA cells within disease-relevant cells in the analyzed cell type
-disease_relevant_oa_vs_ra_markers_path <- "src/seurat/disease_relevant_oa_vs_ra_markers.csv"
+disease_relevant_oa_vs_ra_markers_path <- "src/seurat/output/disease_relevant_oa_vs_ra_markers.csv"
 
 # path to write CSV with markers differentiating OA and RA cells within disease-irrelevant cells in the analyzed cell type
 disease_irrelevant_oa_vs_ra_markers_path <- "src/seurat/output/disease_irrelevant_ oa_vs_ra_markers.csv"
