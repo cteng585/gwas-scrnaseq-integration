@@ -1,4 +1,3 @@
-import csv
 import os
 import re
 from typing import Dict, List, Optional
@@ -6,6 +5,8 @@ from pathlib import Path
 
 import pandas as pd
 import sh
+
+from src.utils import detect_delimiter
 
 
 def run_magma(no_arg_flags: List, yes_arg_flags: Dict):
@@ -31,7 +32,7 @@ def run_magma(no_arg_flags: List, yes_arg_flags: Dict):
     magma(command_list)
 
 
-def munge_pval(
+def munge_gwas(
     gwas_pval: Path,
     variant_id: Optional[str] = None,
     pval: Optional[str] = None,
@@ -62,8 +63,8 @@ def munge_pval(
     with open(gwas_pval, "r") as infile:
         header = infile.readline()
 
-    file_delimiter = str(csv.Sniffer().sniff(header).delimiter)
-    header = header.strip().split(file_delimiter)
+    delimiter = detect_delimiter(gwas_pval)
+    header = header.strip().split(delimiter)
 
     column_patterns = {
         "pval": pval if pval else re.compile(r"^p.?(val)?", flags=re.IGNORECASE),
@@ -111,7 +112,7 @@ def munge_pval(
     # try to lazily load the gwas p-value file by not loading the chromosome, base pair,
     # reference allele, or effect allele information unless variant IDs are missing
     gwas = pd.read_csv(
-        gwas_pval, sep=file_delimiter, usecols=core_cols, dtype=core_dtypes
+        gwas_pval, sep=delimiter, usecols=core_cols, dtype=core_dtypes
     )
 
     # if there are any missing variant IDs, fill using the hg19 format:
@@ -129,7 +130,7 @@ def munge_pval(
         }
 
         extension = pd.read_csv(
-            gwas_pval, sep=file_delimiter, usecols=filler_cols, dtype=filler_dtypes
+            gwas_pval, sep=delimiter, usecols=filler_cols, dtype=filler_dtypes
         )
 
         gwas = pd.concat([gwas, extension], axis=1)
@@ -147,7 +148,16 @@ def munge_pval(
     # MAGMA doesn't accept p-values <= 1e-308
     # convert p-values below this value to the floor value
     gwas.loc[
-        gwas[column_patterns["pval"]] <= 1e-308, column_patterns["pval"]
-    ] = 9.999e-307
+        gwas[column_patterns["pval"]] < 9.9999999999999999e-307, column_patterns["pval"]
+    ] = 9.9999999999999999e-307
+
+    # the annotation step requires the first three columns of the SNP location file
+    # to be the SNP ID, chromosome, and base pair location. any additional columns are ignored
+    gwas = gwas[[
+        column_patterns["variant_id"],
+        column_patterns["chr"],
+        column_patterns["bp"],
+        column_patterns["pval"],
+    ]]
 
     return gwas

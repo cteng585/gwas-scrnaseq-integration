@@ -1,13 +1,13 @@
 from pathlib import Path
 from typing import Optional, Tuple, Union
 
-from utils import run_magma
+from src.gwas_processing.utils import run_magma
 
 
 def annotate_variants(
-    gene_loc: Path,
-    snp_loc: Path,
-    output_prefix: Path,
+    gene_loc: str,
+    snp_loc: str,
+    output_prefix: str,
     annotation_window: Optional[Tuple[int, int]],
 ) -> Tuple[Path, Path]:
     """
@@ -36,8 +36,8 @@ def annotate_variants(
         del yes_arg_flags["window"]
 
     run_magma(no_arg_flags, yes_arg_flags)
-    annotation_output = Path(f"{str(output_prefix)}.genes.annot")
-    annotation_log = Path(f"{str(output_prefix)}.log")
+    annotation_output = Path(f"{output_prefix}.genes.annot")
+    annotation_log = Path(f"{output_prefix}.log")
 
     assert (
         annotation_output.exists()
@@ -50,13 +50,13 @@ def annotate_variants(
 
 
 def gene_analysis(
-    bfile: Path,
-    gene_annot: Path,
-    gwas: Path,
+    bfile: str,
+    gene_annot: str,
+    gwas: str,
     variant_id: str,
     pval: str,
     n: Union[int, str],
-    output_prefix: Path,
+    output_prefix: str,
 ) -> Tuple[Path, Path, Path, Path]:
     """
     wrapper for conducting gene analysis on GWAS results in the form of an SNP-wise p-value file
@@ -94,10 +94,10 @@ def gene_analysis(
 
     run_magma(no_arg_flags, yes_arg_flags)
 
-    gene_analysis_log = Path(f"{str(output_prefix)}.log")
-    gene_analysis_supplemental_log = Path(f"{str(output_prefix)}.log.suppl")
-    gene_analysis_raw = Path(f"{str(output_prefix)}.genes.raw")
-    gene_analysis_out = Path(f"{str(output_prefix)}.genes.out")
+    gene_analysis_log = Path(f"{output_prefix}.log")
+    gene_analysis_supplemental_log = Path(f"{output_prefix}.log.suppl")
+    gene_analysis_raw = Path(f"{output_prefix}.genes.raw")
+    gene_analysis_out = Path(f"{output_prefix}.genes.out")
 
     assert (
         gene_analysis_log.exists()
