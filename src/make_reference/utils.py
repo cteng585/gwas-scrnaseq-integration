@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Dict, List, Union
 
 import sh
-from classes import Ancestry, BFileType, BFileSet
+from src.make_reference.classes import Ancestry, BFileType, BFileSet
 
 # TODO: change strings to pathlib objects
 # TODO: logging
@@ -81,6 +81,9 @@ def use_bfiles(bfile_dir: Union[Path, str], *args: Ancestry) -> Dict[str, BFileS
     # also validates that each PLINK bfile sets is a complete set of 3 bfiles + an ancestry
     for bfile_stem in bfile_sets:
         bfile_sets[bfile_stem] = BFileSet.model_validate(bfile_sets[bfile_stem])
+
+    print("Available bfile sets that match ancestry: ")
+    print("\n".join(bfile_sets))
 
     return bfile_sets
 

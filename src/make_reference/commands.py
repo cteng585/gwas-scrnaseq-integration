@@ -5,8 +5,8 @@ from typing import Dict, List, Tuple
 
 import sh
 
-import utils
-from classes import BFileSet
+import src.make_reference.utils as utils
+from src.make_reference.classes import BFileSet
 
 
 def prune_problem_variants(bfiles: List, work_dir: str) -> None:
