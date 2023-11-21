@@ -29,10 +29,10 @@ def make_dir(parent_dir: str, dir_name: str = "") -> str:
     :return: name of the directory that was (attempted to be) created
     """
     if not os.path.exists(f"{parent_dir}/{dir_name}"):
-        print(f"making directory {parent_dir}/{dir_name}")
+        print(f"making directory {Path(parent_dir).stem}/{dir_name}")
         os.makedirs(f"{parent_dir}/{dir_name}")
     else:
-        print(f"directory {parent_dir}/{dir_name} already exists")
+        print(f"directory {Path(parent_dir).stem}/{dir_name} already exists")
 
     return f"{parent_dir}/{dir_name}"
 
