@@ -1,0 +1,5 @@
+**__pycache__**
+src/**/tmp
+src/**/output
+src/*.ipynb
+.Rproj.user
