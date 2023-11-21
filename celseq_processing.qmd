@@ -1,0 +1,242 @@
+---
+title: "Single Cell Analysis"
+format: html
+---
+
+# Resolve Dependencies
+
+```{r echo=FALSE}
+library("ggplot2")
+library("patchwork")
+
+source("src/seurat/celseq_processing.R")
+```
+
+# Define file paths and setup output directory
+
+Define all paths to required files here for ease of changing
+
+```{r}
+# make output directory
+output_directory <- "src/seurat/output"
+
+if (!file.exists(output_directory)) {
+  dir.create(output_directory)
+}
+
+# single-cell expression matrix
+cell_expression_path <- "data/seurat/celseq_matrix_ru10_molecules.tsv" 
+
+# single-cell metadata file
+cell_metadata_path <- "data/seurat/celseq_meta.tsv"
+
+# path to save the cell type distribution to
+cell_type_distribution_path <- "src/seurat/output/cell_type_distribution.png"
+
+# path to save the Seurat object to file
+h5_seurat_path <- "src/seurat/output/ra_sc_rna_seq.h5Seurat"
+ 
+# path to save first PCA to
+pca_10dims <- "src/seurat/output/pca_10dims.png"
+
+# path to save the UMAP to
+umap_save_path <- "src/seurat/output/umap_cell_clusters_v1.png"
+
+# path to save the UMAP to
+umap_save_path_alt <- "src/seurat/output/umap_cell_clusters_v2.png"
+
+# path to save viz of clusters annotated with canonical cell-type markers
+canonical_cell_markers_path <- "src/seurat/output/canonical_markers.png"
+
+# directory containing cell scores
+cell_score_dir <- "src/score_cells/output/"
+```
+
+# Load Data into a Seurat Object
+
+Both the single-cell expression matrix and the metadata associated with each cell is required.
+
+```{r}
+celseq_object <- load_celseq_data(cell_expression_path, cell_metadata_path) 
+```
+
+# Standard pre-processing steps
+
+Matches steps taken during Seurat reproducibility study
+
+```{r}
+celseq_object[["percent.mt"]] <- PercentageFeatureSet(celseq_object, pattern="^MT-")
+celseq_object <- subset(celseq_object, subset=nCount_RNA > 500 & nFeature_RNA > 200 & percent.mt < 25)
+
+celseq_object <- NormalizeData(celseq_object, normalization.method="LogNormalize", scale.factor=10000)
+celseq_object <- FindVariableFeatures(celseq_object, selection.method = "vst", nfeatures=2000)
+
+all_genes <- rownames(celseq_object)
+```
+
+### Save pre-processed data to file
+
+scDRS expects "size-factor-normalized (e.g., 10,000 counts per cell) and log-transformed (log(x + 1))" expression matrix data ([article here](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC9891382/#S10title)], and does not accept negative values in the expression matrix.
+
+The Zhang et al. data is already size-factor-normalized and `NormalizeData` handles log-normalization.
+
+Since scaling the data (for PCA) introduces negative-values, save the pre-processed data to file before scaling and proceeding with exploratory analysis of the data.
+
+This allows loading of the data for the next Quarto document to remove need to redo the pre-processing steps.
+
+Also conversion of the Seurat object to HDF5 enables scDRS to generate cell-wise scores.
+
+```{r}
+DefaultAssay(celseq_object) <- "RNA"
+if (file.exists(h5_seurat_path)) {
+  file.remove(h5_seurat_path)
+  file.remove(gsub(".h5Seurat", ".h5ad", h5_seurat_path))
+  SaveH5Seurat(celseq_object, filename = h5_seurat_path)
+  Convert(h5_seurat_path, dest = "h5ad") 
+} else {
+  SaveH5Seurat(celseq_object, filename = h5_seurat_path)
+  Convert(h5_seurat_path, dest = "h5ad") 
+}
+```
+
+Finally scale the data
+
+```{r}
+celseq_object <- ScaleData(celseq_object, features = all_genes)
+```
+
+# Exploratory Data Analysis
+
+Get counts of cell types
+
+```{r}
+cell_type_df <- as.data.frame(table(celseq_object@meta.data$type))
+
+cell_freq_bar <- ggplot(data = cell_type_df, mapping = aes(x = Var1, y = Freq, label = Freq, fill = Var1)) + 
+  geom_bar(stat="identity", show.legend = FALSE) +
+  labs(title = "Cell Type Distribution") + 
+  xlab("Cell Type") + 
+  ylab("Cell Count (Raw)") + 
+  geom_text(vjust = 1.9, color = "white") + 
+  theme_classic()
+
+cell_freq_bar
+
+ggsave(plot = cell_freq_bar, filename = cell_type_distribution_path, dpi = 300, width = 4, height = 7)
+```
+
+# Recapitulating Original Cell-Types
+
+Attempt to recreate the cell clusters defined in the [original single-cell study](https://www.nature.com/articles/s41590-019-0378-1)
+
+## Original plot to reproduce cell clusters
+
+```{r}
+# set seed for reproducibility
+set.seed(123)
+
+# Run a PCA, stored in the reductions slot with key @pca
+celseq_object<- RunPCA(celseq_object, features = VariableFeatures(object = celseq_object), verbose = FALSE)
+
+# Run a TSNE, stored in the reductions slot with key @tsne
+celseq_object <- RunTSNE(celseq_object, verbose = FALSE, check_duplicates = FALSE)
+
+# Examine and visualize PCA results a few different ways
+print(celseq_object[["pca"]], dims=1:5, nfeatures=5)
+
+dim_reduction_weightings <- VizDimLoadings(celseq_object, dims=1:2, reduction="pca")
+
+naive_pca <- DimPlot(celseq_object, reduction="pca")
+
+naive_tsne <- DimPlot(celseq_object, reduction = "tsne", group.by= "type")
+
+pca_500_cells_1dim <- DimHeatmap(celseq_object, dims=1, cells=500, balanced=TRUE)
+
+pca_500_cells_10dims <- DimHeatmap(celseq_object, dims=1:10, cells=500, balanced=TRUE, fast = FALSE, combine = TRUE)
+
+elbow_dimensions <- ElbowPlot(celseq_object, reduction="pca")
+
+layout_matrix <- matrix(c(1, 4, 7, 0, 2, 5, 8, 0, 3, 6, 9, 10), nrow = 4, ncol = 3)
+layout_matrix <- "
+ABCD
+EFGH
+##IJ
+"
+arranged_pca <- pca_500_cells_10dims + 
+  plot_layout(design = layout_matrix) + 
+  plot_annotation(tag_levels = c("1"), tag_prefix = "PC", tag_sep = " ")
+ggsave(plot = arranged_pca, filename = pca_10dims, dpi = 300, width = 15, height = 10)
+
+elbow_dimensions
+```
+
+```{r}
+# based on elbow plots, first 10 dimensions account for most of the variability in the data set
+# use 10 dimensions for UMAP
+celseq_object <- RunUMAP(celseq_object, verbose = FALSE, dims=1:10)
+
+umap_clusters <- DimPlot(celseq_object, reduction="umap", group.by="type", shuffle=TRUE, label = TRUE) + 
+  labs(title="Pre-defined Cell-type Clustering")
+
+ggsave(umap_save_path, plot=umap_clusters, width=10)
+
+umap_clusters
+```
+
+## Alternative plot to see if using a different seed results in the same cell clusters
+
+```{r}
+# set seed for reproducibility
+set.seed(246)
+
+# Run a PCA, stored in the reductions slot with key @pca
+celseq_alt<- RunPCA(celseq_object, features = VariableFeatures(object = celseq_object), verbose = FALSE)
+
+# Run a TSNE, stored in the reductions slot with key @tsne
+celseq_alt <- RunTSNE(celseq_object, verbose = FALSE, check_duplicates = FALSE)
+
+# Examine and visualize PCA results a few different ways
+print(celseq_alt[["pca"]], dims=1:5, nfeatures=5)
+
+dim_reduction_weightings <- VizDimLoadings(celseq_object, dims=1:2, reduction="pca")
+
+naive_pca <- DimPlot(celseq_object, reduction="pca")
+
+naive_tsne <- DimPlot(celseq_object, reduction = "tsne", group.by= "type")
+
+pca_500_cells_1dim <- DimHeatmap(celseq_object, dims=1, cells=500, balanced=TRUE)
+
+pca_500_cells_9dims <- DimHeatmap(celseq_object, dims=1:9, cells=500, balanced=TRUE)
+
+elbow_dimensions <- ElbowPlot(celseq_object, reduction="pca")
+```
+
+```{r}
+celseq_alt <- RunUMAP(celseq_alt, verbose = FALSE, dims=1:9)
+
+umap_clusters_alt <- DimPlot(celseq_alt, reduction="umap", group.by="type", shuffle=TRUE, label = TRUE) + 
+  labs(title="Pre-defined Cell-type Clustering")
+
+ggsave(umap_save_path_alt, plot=umap_clusters_alt, width=10)
+
+umap_clusters_alt
+```
+
+## Check if the annotated cell clusters by pre-defined type are valid using canonical cell-type markers
+
+```{r}
+# Find nearest neighbors
+celseq_object <- FindNeighbors(celseq_object, dims=1:10, reduction="pca")
+
+# Find clusters
+celseq_object <- FindClusters(celseq_object, resolution=0.5)
+
+# Set the cluster identity as a metadata column
+celseq_object$cluster <- celseq_object$seurat_clusters
+
+canonical_cell_markers <- FeaturePlot(celseq_object, c("CD14", "CD3D", "PDGFRA", "CD79A", "MS4A1"), ncol = 2)
+
+ggsave(plot = canonical_cell_markers, filename = canonical_cell_markers_path, dpi = 300,  width = 7, height = 10)
+
+canonical_cell_markers
+```

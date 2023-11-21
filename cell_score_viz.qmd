@@ -1,0 +1,390 @@
+---
+title: "Single Cell Analysis"
+format: html
+---
+
+# Resolve Dependencies
+```{r}
+library("ggplot2")
+library("ggtext")
+library("gt")
+library("webshot2")
+source("src/seurat/celseq_processing.R")
+```
+
+# Define file paths and setup output directory
+
+Define all paths to required files here for ease of changing
+
+```{r}
+# make output directory
+output_directory <- "src/seurat/output"
+
+if (!file.exists(output_directory)) {
+  dir.create(output_directory)
+}
+
+# path of save the Seurat object that was saved to file
+h5_seurat_path <- "src/seurat/output/ra_sc_rna_seq.h5Seurat"
+
+# directory containing cell scores
+cell_score_dir <- "src/score_cells/output/"
+
+# path to write viz with disease relevance scores using 50, 100, 500, and 1000 Monte-Carlo controls
+combined_drs_plot_path <- "src/seurat/output/disease_score_plot.png"
+
+# path to write viz with disease relevance scores for 1000 Monte-Carlo sampled controls only
+drs_1000_controls_path <- "src/seurat/output/disease_score_1000.png"
+
+# path to write viz with all cell p-values denoting disease relevance using 50, 100, 500, and 1000 Monte-Carlo controls
+combined_pval_plot_path <- "src/seurat/output/pval_plot.png"
+
+# path to write viz with cell p-values for 1000 Monte-Carlo sampled controls only
+pval_1000_controls_path <- "src/seurat/output/pval_1000.png"
+
+# path to write viz with markers that differentiate RA-relevant vs RA-irrelevant cell subpopulations within the analyzed cell type
+cell_type_subpopulations_path <- "src/seurat/output/cell_type_subpopulation_markers.png"
+
+# path to write table with differentially expressed markers between RA-relevant and RA-irrelevant cell subpopulations within the analyzed cell type
+ra_de_table_path <- "src/seurat/output/ra_de_table.png"
+
+# path to write viz showing distribution of RA associated cells (case) vs osteoarthritis associated cells (control)
+disease_plot_path <- "src/seurat/output/ra_cells.png"
+
+# path to write CSV with RA markers
+ra_markers_path <- "src/seurat/output/ra_markers.csv"
+
+# path to write CSV with markers differentiating OA and RA cells in the analyzed cell type
+oa_vs_ra_markers_path <- "src/seurat/output/oa_vs_ra_markers.csv"
+
+# path to write CSV with markers differentiating OA and RA cells within disease-relevant cells in the analyzed cell type
+disease_relevant_oa_vs_ra_markers_path <- "src/seurat/disease_relevant_oa_vs_ra_markers.csv"
+
+# path to write CSV with markers differentiating OA and RA cells within disease-irrelevant cells in the analyzed cell type
+disease_irrelevant_oa_vs_ra_markers_path <- "src/seurat/output/disease_irrelevant_ oa_vs_ra_markers.csv"
+```
+
+# Define parameters
+
+Define parameters that will be used later to alter analysis as necessary
+
+Placed here for ease of use
+
+```{r}
+# the cell type to evaluate subpopulation markers in
+cell_type <- "Monocyte"
+
+# the percent split between trait-positive and trait-negative (RA) when considering
+# a p-value threshold to use (e.g. a 0.2 or 20% split means that the top 20% of cells
+# with respect to p-value will be considered trait-positive)
+# see the "Characterizing cell subpopulations section" for details
+n_perc_cell_threshold <- 0.20
+```
+
+
+# Merge the disease score data with the metadata
+
+```{r}
+celseq_object <- LoadH5Seurat(h5_seurat_path)
+celseq_object <- add_cell_scores(celseq_object, cell_score_dir)
+```
+
+
+
+```{r}
+# set seed for reproducibility
+set.seed(123)
+
+all_genes <- rownames(celseq_object)
+
+celseq_object <- ScaleData(celseq_object, features = all_genes)
+
+# Run a PCA, stored in the reductions slot with key @pca
+celseq_object<- RunPCA(celseq_object, features = VariableFeatures(object = celseq_object), verbose = FALSE)
+
+# Find nearest neighbors
+celseq_object <- FindNeighbors(celseq_object, dims=1:10, reduction="pca")
+
+# Find clusters
+celseq_object <- FindClusters(celseq_object, resolution=0.5)
+
+celseq_object <- RunUMAP(celseq_object, verbose = FALSE, dims=1:10)
+
+DimPlot(celseq_object, reduction="umap", group.by="type", shuffle=TRUE, label = TRUE) + 
+  labs(title="Pre-defined Cell-type Clustering")
+
+```
+
+# Make the p-value plots
+```{r}
+
+color_scale = c("#FFFFFF", "#2239BD")
+
+score_1 <- FeaturePlot(celseq_object, features="norm_score_cell_scores_50", cols=color_scale, order=TRUE) + 
+  labs(title = "Normalized Disease Score (50 controls)") +
+  theme(plot.title = element_text(size = 12)) + 
+  xlab("UMAP 1") + 
+  ylab("UMAP 2")
+
+score_2 <- FeaturePlot(celseq_object, features="norm_score_cell_scores_100", cols=color_scale, order=TRUE) + 
+  labs(title = "Normalized Disease Score (100 controls)") + 
+  theme(plot.title = element_text(size = 12)) + 
+  xlab("UMAP 1") + 
+  ylab("UMAP 2")
+
+score_3 <- FeaturePlot(celseq_object, features="norm_score_cell_scores_500", cols=color_scale, order=TRUE) + 
+  labs(title = "Normalized Disease Score (500 controls)") + 
+  theme(plot.title = element_text(size = 12)) + 
+  xlab("UMAP 1") + 
+  ylab("UMAP 2")
+
+score_4 <- FeaturePlot(celseq_object, features="norm_score_cell_scores_1000", cols=color_scale, order=TRUE) + 
+  labs(title = "Normalized Disease Score (1000 controls)") + 
+  theme(plot.title = element_text(size = 12)) + 
+  xlab("UMAP 1") + 
+  ylab("UMAP 2")
+
+score_grid <- score_1 + score_2 + score_3 + score_4 + plot_layout(ncol=2)
+score_grid
+ggsave(combined_drs_plot_path, plot = score_grid, width = 13.3, height = 10)
+
+score_4 <- score_4 + theme(plot.title = element_text(size = 18))
+ggsave(drs_1000_controls_path, plot = score_4, width = 13.3, height = 10)
+score_4
+```
+
+# Make the disease score plots
+
+```{r}
+color_scale = c("#FFFFFF", "#BF2222CC")
+
+pval_1 <- FeaturePlot(celseq_object, features="disease_nlog10_pval_cell_scores_50", cols=color_scale, order=TRUE) + 
+  labs(title = "-log<sub>10</sub> p-Value (50 controls)") +
+  theme(plot.title = element_markdown(size = 12)) + 
+  xlab("UMAP 1") + 
+  ylab("UMAP 2")
+
+pval_2 <- FeaturePlot(celseq_object, features="disease_nlog10_pval_cell_scores_100", cols=color_scale, order=TRUE) + 
+  labs(title = "-log<sub>10</sub> p-Value (100 controls)") + 
+  theme(plot.title = element_markdown(size = 12)) + 
+  xlab("UMAP 1") + 
+  ylab("UMAP 2")
+
+pval_3 <- FeaturePlot(celseq_object, features="disease_nlog10_pval_cell_scores_500", cols=color_scale, order=TRUE) + 
+  labs(title = "-log<sub>10</sub> p-Value (500 controls)") + 
+  theme(plot.title = element_markdown(size = 12)) + 
+  xlab("UMAP 1") + 
+  ylab("UMAP 2")
+
+pval_4 <- FeaturePlot(celseq_object, features="disease_nlog10_pval_cell_scores_1000", cols=color_scale, order=TRUE) + 
+  labs(title = "-log<sub>10</sub> p-Value (1000 controls)") + 
+  theme(plot.title = element_markdown(size = 12)) + 
+  xlab("UMAP 1") + 
+  ylab("UMAP 2")
+
+pval_grid <- pval_1 + pval_2 + pval_3 + pval_4 + plot_layout(ncol=2)
+pval_grid
+ggsave(combined_pval_plot_path, plot = pval_grid, width = 13.3, height = 10)
+
+pval_4 <- pval_4 + theme(plot.title = element_markdown(size = 18))
+ggsave(pval_1000_controls_path, plot = pval_4, width = 13.3, height = 10)
+pval_4
+```
+
+# Characterizing cell subpopulation
+
+```{r}
+celseq_copy <- celseq_object
+Idents(object = celseq_copy) <- "type"
+cell_type_subset <- subset(celseq_copy, idents = cell_type)
+cell_type_pval_histo <- ggplot(data = cell_type_subset@meta.data, aes(x = disease_nlog10_pval_cell_scores_1000)) +
+  geom_histogram() + 
+  xlab("log p-value (1000 controls)") + 
+  ylab("Count")
+
+cell_type_pval_histo
+```
+
+Choose a threshold for significance using the top n% most significant cells. Histogram of p-values as a sanity check. The interpretation of the threshold is the where to differentiate between RA-associated and not RA-associated cells.
+
+```{r}
+pval_threshold <- sort(cell_type_subset$disease_nlog10_pval_cell_scores_1000, decreasing = TRUE)[ceiling(length(cell_type_subset$disease_nlog10_pval_cell_scores_1000) * n_perc_cell_threshold)]
+
+cell_type_subset$disease_associated <- ifelse(cell_type_subset$disease_nlog10_pval_cell_scores_1000 >= pval_threshold, "RA+", "RA-")
+Idents(object = cell_type_subset) <- "disease_associated"
+ra_markers <- FindMarkers(cell_type_subset, ident.1 = "RA+", ident.2 = "RA-")
+
+head(ra_markers, 20)
+```
+
+Finding cell subpopulation markers
+
+```{r}
+# find the top non-HLA markers
+ra_markers$gene <- rownames(ra_markers)
+ra_markers <- subset(ra_markers, !grepl("^HLA", ra_markers$gene))
+
+# examine the distribution of the top 10 non-HLA markers to see if any are correlated
+# with the distribution of a disease relevant cell subpopulation
+cell_type_subpopulations <- FeaturePlot(celseq_object, features = ra_markers$gene[1:10]) + 
+    xlab("UMAP 1") + 
+    ylab("UMAP 2")
+
+ggsave(cell_type_subpopulations_path, plot = cell_type_subpopulations, width = 13.3, height = 13, dpi = 300)
+
+cell_type_subpopulations
+```
+
+# Gene table construction function
+
+```{r}
+# table construction constants
+c_col = c("#1e3048", "#274060", "#2f5375", "#4073a0", "#5088b9")
+c_col_light_blue = c("#edf2fb", "#e2eafc", "#d7e3fc", "#ccdbfd", "#c1d3fe")
+c_container_width = px(800)
+c_table_width = px(650)
+
+make_pretty_de_table <- function(
+    find_markers_object, 
+    output_filepath, 
+    num_genes,
+    title,
+    subtitle,
+    fc_footnote
+) {
+  markers_df <- data.frame(find_markers_object)
+  markers_df$gene <- rownames(markers_df)
+  
+  # table initialization
+  de_table <- markers_df[, c("gene", "avg_log2FC", "p_val", "p_val_adj")] %>%
+    arrange(p_val_adj) %>%
+    head(num_genes) %>%
+    gt(
+      rowname_col = "gene"
+    )
+  
+  # column and row formatting
+  de_table <- de_table %>%
+    fmt_scientific(columns = c("p_val", "p_val_adj")) %>%
+    fmt_number(columns = c("avg_log2FC")) %>%
+    cols_width(
+      vars(p_val) ~ px(175),
+      vars(avg_log2FC) ~ px(175),
+      vars(p_val_adj) ~ px(175),
+     ) %>% 
+    cols_label(
+      p_val = md("p-value"),
+      avg_log2FC = md("log~2~ fold change"),
+      p_val_adj = md("adjusted p-value")
+    ) %>%
+    opt_row_striping()
+    
+  # title/notes
+  de_table <- de_table %>%
+    tab_header(
+      title = title,
+      subtitle = subtitle
+    ) %>%
+    tab_footnote(
+      footnote = fc_footnote,
+      locations = cells_column_labels(columns = c("avg_log2FC"))
+    )
+  
+  # other formatting
+  de_table <- de_table %>%
+    tab_options(
+      table.width = c_table_width,
+      container.width = c_container_width,
+      container.padding.x = 20,
+      table.font.name = "Optima",
+      table.font.color = c_col[1],
+      table.border.top.style = "none",
+      table.border.bottom.style = "solid",
+      table.border.bottom.color = c_col[2],
+      table.border.bottom.width = px(3),
+      column_labels.border.top.color = "white",
+      column_labels.border.top.width = px(3),
+      column_labels.border.bottom.color = c_col[2],
+      column_labels.border.bottom.width = px(3),
+      data_row.padding = px(10)
+    )
+    
+  gtsave(de_table, output_filepath) 
+}
+```
+
+Construct table for disease relevant vs non-disease relevant markers
+
+```{r}
+title <- sprintf("%s Subpopulation Differential Expression", cell_type)
+subtitle <- sprintf("Top 20 genes that are differentially expressed between disease-relevant and disease-irrelevant %s subpopulations", cell_type)
+fc_footnote <- "Positive values indicate that the gene is more highly expressed in RA-relevant cells compared to RA-irrelevant cells"
+
+make_pretty_de_table(
+  find_markers_object = ra_markers,
+  output_filepath = ra_de_table_path,
+  num_genes = 20,
+  title = title,
+  subtitle = subtitle,
+  fc_footnote = fc_footnote
+)
+```
+
+# Differential Expression
+
+First compare OA vs RA genes
+
+```{r}
+# set the identifying feature to the annotated disease
+Idents(object = cell_type_subset) <- "disease"
+
+# find marker genes that differentiate OA from RA
+oa_vs_ra_markers <- FindMarkers(cell_type_subset, ident.1 = "RA", ident.2 = "OA")
+top_marker_plot <- FeaturePlot(cell_type_subset, features = c(ra_markers$gene[1]))
+
+Idents(celseq_object) <- "disease"
+oa_cells <- WhichCells(celseq_object, idents = c("OA"))
+ra_cells <- WhichCells(celseq_object, idents = c("RA"))
+
+# Plot RA-annotated cells on the UMAP
+disease_plot <- DimPlot(celseq_object, reduction="umap", group.by="type", shuffle=TRUE, label=TRUE, order=TRUE, cells.highlight = list(oa_cells, ra_cells)) + 
+  scale_color_manual(labels = c("Osteoarthritis Cells", "Rheumatoid Arthritis Cells"), values = c("grey", "red")) + 
+  labs(color = "Cell Disease State", title = "Cell Disease Annotations")
+disease_plot[[1]]$layers[[1]]$aes_params$alpha = 0.2
+
+ggsave(plot = disease_plot, filename = disease_plot_path, dpi = 300, width = 10, height = 7)
+
+top_marker_plot
+disease_plot
+```
+
+Then compare RA vs OA in the two different cell-type subpopulations: 1. Disease-relevant cells 2. Disease-irrelevant cells
+
+```{r}
+Idents(object = cell_type_subset) <- "disease_associated"
+disease_relevant_cells <- subset(cell_type_subset, idents = "RA+")
+disease_irrelevant_cells <- subset(cell_type_subset, idents = "RA-")
+
+# compare RA vs OA markers in disease-relevant cells
+Idents(object = disease_relevant_cells) <- "disease"
+disease_relevant_oa_vs_ra_markers <- FindMarkers(object = disease_relevant_cells, ident.1 = "RA", ident.2 = "OA")
+disease_relevant_oa_vs_ra_markers
+
+# compare OA vs RA markers in disease-irrelevant cells
+Idents(object = disease_irrelevant_cells) <- "disease"
+disease_irrelevant_oa_vs_ra_markers <- FindMarkers(object = disease_irrelevant_cells, ident.1 = "RA", ident.2 = "OA")
+disease_irrelevant_oa_vs_ra_markers
+```
+
+Write markers to file
+
+```{r}
+write.csv(ra_markers, ra_markers_path)
+
+write.csv(oa_vs_ra_markers, oa_vs_ra_markers_path)
+
+write.csv(disease_relevant_oa_vs_ra_markers, disease_relevant_oa_vs_ra_markers_path)
+
+write.csv(disease_irrelevant_oa_vs_ra_markers, disease_irrelevant_oa_vs_ra_markers_path)
+```
+
