@@ -25,7 +25,7 @@ def annotate_variants(
 
     no_arg_flags = ["--annotate"]
     yes_arg_flags = {
-        "window": f"{annotation_window[0]},{annotation_window[1]}",
+        "window": f"{annotation_window[0]},{annotation_window[1]}" if annotation_window else None,
         "--gene-loc": gene_loc,
         "--snp-loc": snp_loc,
         "--out": output_prefix,

@@ -1,5 +1,6 @@
 import os
 import re
+import shutil
 from typing import Dict, List, Optional
 from pathlib import Path
 
@@ -17,9 +18,7 @@ def run_magma(no_arg_flags: List, yes_arg_flags: Dict):
     :param yes_arg_flags: MAGMA flags that do take an argument (e.g. --out)
     :return:
     """
-    assert "/magma" in os.environ.get(
-        "PATH"
-    ), f"Couldn't find a magma executable in the $PATH variable"
+    assert shutil.which("magma"), f"Couldn't find a magma executable in the $PATH variable"
 
     magma = sh.Command("magma")
     command_list = [*no_arg_flags]

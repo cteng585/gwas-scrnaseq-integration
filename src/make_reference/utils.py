@@ -1,13 +1,11 @@
 import os
 import re
+import shutil
 from pathlib import Path
 from typing import Dict, List, Union
 
 import sh
 from src.make_reference.classes import Ancestry, BFileType, BFileSet
-
-# TODO: change strings to pathlib objects
-# TODO: logging
 
 
 def use_bfiles(bfile_dir: Union[Path, str], *args: Ancestry) -> Dict[str, BFileSet]:
@@ -96,9 +94,7 @@ def run_plink(no_arg_flags: List, yes_arg_flags: Dict):
     :param yes_arg_flags: PLINK flags that do take an argument (e.g. --out)
     :return:
     """
-    assert "/plink" in os.environ.get(
-        "PATH"
-    ), f"Couldn't find a plink executable in the $PATH variable"
+    assert shutil.which("plink"), f"Couldn't find a plink executable in the $PATH variable"
 
     plink = sh.Command("plink")
     command_list = [*no_arg_flags]
