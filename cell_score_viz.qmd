@@ -24,8 +24,8 @@ if (!file.exists(output_directory)) {
   dir.create(output_directory)
 }
 
-# path of save the Seurat object that was saved to file
-h5_seurat_path <- "src/seurat/output/ra_sc_rna_seq.h5Seurat"
+# path to load the saved Seurat object from
+h5_seurat_path <- "src/seurat/tmp/ra_sc_rna_seq.h5Seurat"
 
 # directory containing cell scores
 cell_score_dir <- "src/score_cells/output/"

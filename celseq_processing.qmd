@@ -17,8 +17,13 @@ source("src/seurat/celseq_processing.R")
 Define all paths to required files here for ease of changing
 
 ```{r}
-# make output directory
+# make tmp and output directories
+tmp_directory <- "src/seurat/tmp"
 output_directory <- "src/seurat/output"
+
+if (!file.exists(tmp_directory)) {
+  dir.create(tmp_directory)
+}
 
 if (!file.exists(output_directory)) {
   dir.create(output_directory)
@@ -34,7 +39,7 @@ cell_metadata_path <- "data/seurat/celseq_meta.tsv"
 cell_type_distribution_path <- "src/seurat/output/cell_type_distribution.png"
 
 # path to save the Seurat object to file
-h5_seurat_path <- "src/seurat/output/ra_sc_rna_seq.h5Seurat"
+h5_seurat_path <- "src/seurat/tmp/ra_sc_rna_seq.h5Seurat"
  
 # path to save first PCA to
 pca_10dims <- "src/seurat/output/pca_10dims.png"
@@ -42,14 +47,11 @@ pca_10dims <- "src/seurat/output/pca_10dims.png"
 # path to save the UMAP to
 umap_save_path <- "src/seurat/output/umap_cell_clusters_v1.png"
 
-# path to save the UMAP to
+# path to save the alternative UMAP to
 umap_save_path_alt <- "src/seurat/output/umap_cell_clusters_v2.png"
 
 # path to save viz of clusters annotated with canonical cell-type markers
 canonical_cell_markers_path <- "src/seurat/output/canonical_markers.png"
-
-# directory containing cell scores
-cell_score_dir <- "src/score_cells/output/"
 ```
 
 # Load Data into a Seurat Object
